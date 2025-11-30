@@ -20,7 +20,7 @@ class CPLProphetForecaster:
         self.campaign_data = None
         self.forecast = None
         
-    def load_and_prepare_data(self, csv_path='data/Dataset_AM_final.csv', campaign_name='traffic_source_campaign_name_1592'):
+    def load_and_prepare_data(self, csv_path='../data/Dataset_AM_final.csv', campaign_name='traffic_source_campaign_name_1592'):
         """Load and prepare CPL data for Prophet"""
         # Load dataset
         df = pd.read_csv(csv_path)

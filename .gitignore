@@ -1,2 +1,5 @@
 .venv/
 .playground/
+__pycache__/
+*/lightning_logs
+/lightning_logs
