@@ -116,56 +116,81 @@ class CPLProphetForecaster:
             'avg_cpl': self.campaign_data['Cost_per_Lead_anon'].mean()
         }
 
-def main():
-    """Main execution function"""
-    print("CPL Prophet Forecasting")
-    print("=" * 50)
+def main(mode='fast'):
+    """Main execution function - Evaluate ALL campaigns
     
-    # Initialize forecaster
-    forecaster = CPLProphetForecaster()
+    Args:
+        mode: 'fast' (50 epochs for exploration) or 'production' (200 epochs with early stopping)
+    """
+    print("=" * 80)
+    print(f"NEURAL PROPHET - ALL CAMPAIGNS EVALUATION ({mode.upper()} MODE)")
+    print("=" * 80)
     
-    # Load and prepare data
-    print("Loading data...")
-    days_loaded = forecaster.load_and_prepare_data()
-    print(f"Loaded {days_loaded} days of CPL data")
+    # Evaluate campaigns
+    results_df = evaluate_all_campaigns(
+        csv_path='data/Dataset_AM_final.csv',
+        epochs=50 if mode == 'fast' else 200,
+        max_campaigns=None,
+        min_days=30,
+        mode=mode
+    )
     
-    # Train model
-    print("Training Prophet model...")
-    forecaster.train_model()
-    print("Model training complete")
+    if len(results_df) == 0:
+        print("No results to display.")
+        return results_df
     
-    # Make predictions
-    print("Generating predictions...")
-    forecaster.make_predictions(forecast_days=7)
+    # Summary statistics only
+    print("\n" + "=" * 80)
+    print("SUMMARY STATISTICS")
+    print("=" * 80)
     
-    # Evaluate performance
-    performance = forecaster.evaluate_performance()
-    print(f"\nProphet Performance:")
-    print(f"  MAE: {performance['MAE']:.4f}")
-    print(f"  MAPE: {performance['MAPE']:.1f}%")
+    print(f"\nCampaigns evaluated: {len(results_df)}")
+    print(f"Total training days: {results_df['Train_Days'].sum():.0f}")
+    print(f"Total test days:     {results_df['Test_Days'].sum():.0f}")
     
-    # Compare with SMA
-    sma_comparison = forecaster.compare_with_sma()
-    print(f"\nSMA Comparison:")
-    print(f"  3-day SMA error: {sma_comparison['errors']['3-day SMA']:.4f}")
-    print(f"  7-day SMA error: {sma_comparison['errors']['7-day SMA']:.4f}")
-    print(f"  Prophet error: {sma_comparison['errors']['Prophet']:.4f}")
-    print(f"  Best method: {sma_comparison['best_method'][0]} ({sma_comparison['best_method'][1]:.4f})")
+    # Performance metrics
+    print(f"\nNeuralProphet Performance:")
+    print(f"  MAE:  Mean={results_df['Test_MAE'].mean():.4f}, Median={results_df['Test_MAE'].median():.4f}")
+    print(f"  MAPE: Mean={results_df['Test_MAPE'].mean():.1f}%, Median={results_df['Test_MAPE'].median():.1f}%")
     
-    # Show campaign info
-    campaign_info = forecaster.get_campaign_info()
-    print(f"\nCampaign Info:")
-    print(f"  Campaign: {campaign_info['campaign']}")
-    print(f"  Business: {campaign_info['business']}")
-    print(f"  Date Range: {campaign_info['date_range']}")
-    print(f"  Average CPL: {campaign_info['avg_cpl']:.4f}")
+    # Baseline metrics
+    if 'SMA3_MAE' in results_df.columns and 'SMA7_MAE' in results_df.columns:
+        print(f"\nSMA-3 Baseline:")
+        print(f"  MAE:  Mean={results_df['SMA3_MAE'].mean():.4f}, Median={results_df['SMA3_MAE'].median():.4f}")
+        print(f"  MAPE: Mean={results_df['SMA3_MAPE'].mean():.1f}%, Median={results_df['SMA3_MAPE'].median():.1f}%")
+        
+        print(f"\nSMA-7 Baseline:")
+        print(f"  MAE:  Mean={results_df['SMA7_MAE'].mean():.4f}, Median={results_df['SMA7_MAE'].median():.4f}")
+        print(f"  MAPE: Mean={results_df['SMA7_MAPE'].mean():.1f}%, Median={results_df['SMA7_MAPE'].median():.1f}%")
+        
+        # Win rates
+        np_beats_sma3 = (results_df['Test_MAE'] < results_df['SMA3_MAE']).sum()
+        np_beats_sma7 = (results_df['Test_MAE'] < results_df['SMA7_MAE']).sum()
+        total = len(results_df)
+        
+        print(f"\nBaseline Comparison:")
+        print(f"  Beats SMA-3: {np_beats_sma3}/{total} ({np_beats_sma3/total*100:.1f}%)")
+        print(f"  Beats SMA-7: {np_beats_sma7}/{total} ({np_beats_sma7/total*100:.1f}%)")
     
-    # Show future predictions
-    forecast_summary = forecaster.get_forecast_summary()
-    print(f"\n7-Day Forecast:")
-    print(forecast_summary.to_string(index=False))
+    # Training stats
+    if 'Epochs_Trained' in results_df.columns:
+        print(f"\nTraining:")
+        print(f"  Mean epochs: {results_df['Epochs_Trained'].mean():.1f}")
+        if mode == 'production' and 'Converged_Early' in results_df.columns:
+            early_stopped = results_df['Converged_Early'].sum()
+            print(f"  Early stopped: {early_stopped}/{len(results_df)}")
     
-    return forecaster
+    # Save results
+    results_dir = Path('prophet/results')
+    results_dir.mkdir(parents=True, exist_ok=True)
+    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    output_file = results_dir / f'result_{timestamp}.csv'
+    results_df.to_csv(output_file, index=False)
+    print(f"\nResults saved: {output_file}")
+    print("=" * 80)
+    
+    return results_df
 
 if __name__ == "__main__":
     forecaster = main()
